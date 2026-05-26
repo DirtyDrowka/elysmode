@@ -231,11 +231,6 @@ export function useDynamicEngine() {
     return getCharOrStub(b.character_id);
   });
 
-  // Локация ТЕКУЩЕГО блока (та что висела когда блок прилетел)
-  const currentBlockLocationId = computed<string | null>(
-    () => blockLocations.value[currentIdx.value] ?? null
-  );
-
   // Bg больше НЕ блокирует typewriter — пользователь сразу видит текст,
   // фон догружается параллельно. До его готовности рендерится либо
   // дефолтный preset, либо последний загруженный bg (см. displayedBgUrl).

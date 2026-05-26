@@ -287,6 +287,7 @@ watchEffect(() => {
   const el = choicesEl.value;
   if (!el) return;
   if (!choicesRO) choicesRO = makeRO((h) => (choicesHeight.value = h));
+  if (!choicesRO) return; // ResizeObserver не поддерживается
   choicesRO.disconnect();
   choicesRO.observe(el);
 });
