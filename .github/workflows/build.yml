@@ -7,8 +7,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_BACKEND: ghcr.io/${{ github.repository_owner }}/elysmode-backend
-  IMAGE_FRONTEND: ghcr.io/${{ github.repository_owner }}/elysmode-frontend
 
 jobs:
   build:
@@ -18,6 +16,15 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+
+      # GHCR требует lowercase. github.repository_owner может быть с
+      # заглавными (например DirtyDrowka) — приводим к нижнему регистру.
+      - name: Compute lowercase image names
+        id: img
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "backend=ghcr.io/$OWNER/elysmode-backend" >> $GITHUB_OUTPUT
+          echo "frontend=ghcr.io/$OWNER/elysmode-frontend" >> $GITHUB_OUTPUT
 
       - uses: docker/setup-buildx-action@v3
 
@@ -36,10 +43,10 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.IMAGE_BACKEND }}:latest
-            ${{ env.IMAGE_BACKEND }}:${{ github.sha }}
-          cache-from: type=registry,ref=${{ env.IMAGE_BACKEND }}:buildcache
-          cache-to: type=registry,ref=${{ env.IMAGE_BACKEND }}:buildcache,mode=max
+            ${{ steps.img.outputs.backend }}:latest
+            ${{ steps.img.outputs.backend }}:${{ github.sha }}
+          cache-from: type=registry,ref=${{ steps.img.outputs.backend }}:buildcache
+          cache-to: type=registry,ref=${{ steps.img.outputs.backend }}:buildcache,mode=max
 
       - name: Build & push frontend
         uses: docker/build-push-action@v5
@@ -49,11 +56,11 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.IMAGE_FRONTEND }}:latest
-            ${{ env.IMAGE_FRONTEND }}:${{ github.sha }}
+            ${{ steps.img.outputs.frontend }}:latest
+            ${{ steps.img.outputs.frontend }}:${{ github.sha }}
           build-args: |
             VITE_OPENROUTER_KEY=${{ secrets.VITE_OPENROUTER_KEY }}
             VITE_OPENROUTER_MODEL=${{ vars.VITE_OPENROUTER_MODEL || 'x-ai/grok-4.3' }}
             VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
-          cache-from: type=registry,ref=${{ env.IMAGE_FRONTEND }}:buildcache
-          cache-to: type=registry,ref=${{ env.IMAGE_FRONTEND }}:buildcache,mode=max
+          cache-from: type=registry,ref=${{ steps.img.outputs.frontend }}:buildcache
+          cache-to: type=registry,ref=${{ steps.img.outputs.frontend }}:buildcache,mode=max
