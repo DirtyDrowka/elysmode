@@ -1,0 +1,56 @@
+# elys mode — production stack для Dockploy.
+# Все секреты приходят через переменные окружения (Dockploy → Environment).
+#
+# Cloudflare Tunnel routing (настраивается в CF Dashboard на стороне tunnel'a):
+#   bidons.elys.mom    → http://frontend:5173
+#   molochko.elys.mom  → http://backend:3000
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-elysmode}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-elysmode}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-elysmode}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    image: ghcr.io/${GHCR_OWNER}/elysmode-backend:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER:-elysmode}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-elysmode}
+      JWT_SECRET: ${JWT_SECRET}
+      TG_BOT_TOKEN: ${TG_BOT_TOKEN}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY}
+      VITE_OPENROUTER_KEY: ${VITE_OPENROUTER_KEY}
+      VITE_OPENROUTER_MODEL: ${VITE_OPENROUTER_MODEL:-x-ai/grok-4.3}
+      CORS_ORIGIN: ${FRONTEND_ORIGIN:-https://bidons.elys.mom}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-postgres,localhost,127.0.0.1}
+
+  frontend:
+    image: ghcr.io/${GHCR_OWNER}/elysmode-frontend:latest
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  postgres_data:

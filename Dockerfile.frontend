@@ -1,0 +1,26 @@
+# Frontend — Vite build (multi-stage) → nginx раздаёт статику на :5173.
+# VITE_* переменные вшиваются в bundle при сборке, передаются через build-args.
+
+FROM node:22-alpine AS builder
+WORKDIR /app
+
+# Build-time env (Vite зашьёт в bundle)
+ARG VITE_OPENROUTER_KEY
+ARG VITE_OPENROUTER_MODEL
+ARG VITE_API_BASE_URL
+ENV VITE_OPENROUTER_KEY=$VITE_OPENROUTER_KEY
+ENV VITE_OPENROUTER_MODEL=$VITE_OPENROUTER_MODEL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+# Runtime
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 5173
+CMD ["nginx", "-g", "daemon off;"]

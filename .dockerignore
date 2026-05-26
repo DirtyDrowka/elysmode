@@ -1,0 +1,20 @@
+node_modules
+dist
+.git
+.github
+.env
+.env.local
+.env.*.local
+.vscode
+.idea
+*.log
+.DS_Store
+Thumbs.db
+
+# build artefacts
+scripts/test-*.png
+scripts/test-*.mp3
+
+# docs (не нужны в образе)
+*.md
+!README.md

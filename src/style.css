@@ -1,0 +1,174 @@
+:root {
+  interpolate-size: allow-keywords;
+  --accent: #d4ff00;
+  --accent-glow: rgba(212, 255, 0, 0.35);
+  --accent-glow-soft: rgba(212, 255, 0, 0.08);
+  --text-primary: rgba(255, 255, 255, 0.95);
+  --text-secondary: rgba(255, 255, 255, 0.55);
+  --text-tertiary: rgba(255, 255, 255, 0.28);
+
+  --glass-bg: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-highlight: rgba(255, 255, 255, 0.55);
+  --glass-blur: blur(40px) saturate(180%);
+  /* Внутренняя тёмная рамка 4px по периметру с лёгким blur 2px —
+     даёт «вдавленный» вид стекла с мягким краем. Отдельной переменной
+     чтобы paid-кнопка могла её переиспользовать. */
+  --glass-inset: inset 0 0 2px 4px rgba(0, 0, 0, 0.2);
+  --glass-shadow:
+    var(--glass-inset),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+    0 22px 60px rgba(0, 0, 0, 0.6),
+    0 6px 16px rgba(0, 0, 0, 0.35);
+
+  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'SF Pro Display',
+    'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
+
+  --radius-capsule: 32px;
+  --radius-pill: 999px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+body {
+  background: #000;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+ * Liquid glass — см. компонент src/components/LiquidGlass.vue.
+ * Все glass-объекты используют его, не классы.
+ * ────────────────────────────────────────────────────────────────────── */
+
+/* ──────────────────────────────────────────────────────────────────────
+ * Анимации
+ * ────────────────────────────────────────────────────────────────────── */
+@keyframes vn-blink {
+  0%,
+  70%,
+  100% {
+    opacity: 0.55;
+  }
+  35% {
+    opacity: 1;
+  }
+}
+
+@keyframes vn-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
+}
+
+/* bounce pop для каждой новой буквы при печати */
+@keyframes vn-letter-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.78);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(-1.5px) scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* fade — для смены фона/персонажа */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 400ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+ * Liquid glass enter/leave (iOS-26 pop):
+ *   enter: scale(0) → scale(1.06) overshoot → scale(1)
+ *   leave: scale(1) → scale(0)
+ * Использовать через <Transition name="liquid-glass"> или
+ * <TransitionGroup name="liquid-glass"> (со stagger-delay через --lg-stagger).
+ *
+ * Намеренно БЕЗ opacity — иначе iOS Safari отключает backdrop-filter
+ * пока элемент полупрозрачный, и blur пропадает на момент анимации.
+ * scale(0) при opacity:1 визуально схлопывает элемент в точку, что нам и надо.
+ * ────────────────────────────────────────────────────────────────────── */
+/* Кривая БЕЗ spring (без отрицательных y) — overshoot контролируется
+   только keyframe'ом, без двойного "вылета за конечную точку". */
+.liquid-glass-enter-active {
+  animation: lg-pop-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--lg-stagger, 0ms);
+  transform-origin: center;
+}
+.liquid-glass-leave-active {
+  animation: lg-pop-out 200ms cubic-bezier(0.55, 0, 0.85, 0.4) both;
+  animation-delay: var(--lg-stagger, 0ms);
+  transform-origin: center;
+}
+/* TransitionGroup: убираем уходящий элемент из layout, чтобы остальные
+   плавно сдвинулись, а сам он схлопнулся «по месту». */
+.liquid-glass-leave-active.choice-btn {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+.liquid-glass-move {
+  transition: transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes lg-pop-in {
+  0%   { transform: scale(0); }
+  70%  { transform: scale(1.035); }
+  100% { transform: scale(1); }
+}
+@keyframes lg-pop-out {
+  0%   { transform: scale(1); }
+  100% { transform: scale(0); }
+}

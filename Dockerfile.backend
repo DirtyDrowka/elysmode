@@ -1,0 +1,18 @@
+# Backend — Hono + tsx (Node 22).
+# На старте автоматически прогоняет миграции, потом запускает сервер.
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Сначала только манифесты — кешируем npm-слой
+COPY package*.json ./
+# --include=dev: нужен tsx (он в devDependencies) для запуска ts на проде
+RUN npm ci --include=dev
+
+# Копируем всё остальное (под .dockerignore — node_modules исключены)
+COPY . .
+
+EXPOSE 3000
+
+# Миграции идемпотентны (IF NOT EXISTS), безопасно запускать каждый раз
+CMD ["sh", "-c", "npx tsx server/migrate.ts && npx tsx server/index.ts"]
