@@ -18,6 +18,7 @@ import {
   type Message,
 } from '../services/openrouter';
 import { buildSystemPrompt } from './systemPrompt';
+import { useUserProfile } from '../composables/useUserProfile';
 import { api } from '../services/api';
 import {
   upsertCharacter,
@@ -62,7 +63,8 @@ function buildMessages(
   characters: Record<string, Character>,
   storyTitle: string,
   activeLocation: string | null,
-  activeSceneCharacters: string[]
+  activeSceneCharacters: string[],
+  heroDescription: string
 ): Message[] {
   const charList = Object.values(characters);
   let charsBlock = '';
@@ -86,7 +88,7 @@ function buildMessages(
   if (history.length === 0) {
     userContent =
       'Начни новую визуальную новеллу. Придумай интересную атмосферную завязку. ' +
-      'Главный герой — мужчина, повествование от первого лица. ' +
+      `Главный герой: ${heroDescription} ` +
       'Сцена должна сразу втягивать. ' +
       'СНАЧАЛА set_title (один раз), потом create_character (если кто-то в первой сцене), потом edit_scene с location_description и character_ids этих персонажей. Только потом narrator/speech/thought. ' +
       'Не забывай теги: <aggressive>, <lewd>, <info>, <char id="..."> для визуала + ' +
@@ -137,7 +139,7 @@ function buildMessages(
   }
 
   const systemPrompt = buildSystemPrompt({
-    heroDescription: 'Мужчина, повествование от первого лица.',
+    heroDescription,
     characters,
     locationDescription: activeLocation,
     sceneCharacterIds: activeSceneCharacters,
@@ -155,6 +157,10 @@ function makeLocationId(): string {
 }
 
 export function useDynamicEngine() {
+  // user-профиль игрока — подставляется как heroDescription в system prompt.
+  // Если профиля нет — composable отдаст дефолтный шаблон.
+  const userProfile = useUserProfile();
+
   // Видимая цепочка (без change_location). chain[i] показывается пользователю.
   const chain = ref<DisplayBlock[]>([]);
   // Параллельный массив: какая локация была активна когда chain[i] эмитнулся
@@ -512,12 +518,16 @@ export function useDynamicEngine() {
       const activeLocDesc = activeLocationId.value
         ? (locations[activeLocationId.value]?.description ?? null)
         : null;
+      // дождёмся первичной загрузки профиля (если ещё не было) —
+      // нужно чтобы LLM получила свежий heroDescription
+      await userProfile.ensureLoaded();
       const messages = buildMessages(
         history.value,
         characters,
         title.value,
         activeLocDesc,
-        activeSceneCharacterIds.slice()
+        activeSceneCharacterIds.slice(),
+        userProfile.heroDescription.value
       );
       console.log('[engine] generate() start, history len:', history.value.length);
       for await (const block of streamChain(messages)) {

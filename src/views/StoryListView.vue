@@ -160,11 +160,12 @@ const emit = defineEmits<{
   bottom: calc(78px + env(safe-area-inset-bottom, 4px) + 10px);
   z-index: 11;
 
-  /* Зелёный — переопределяем CSS-переменные LiquidGlass под accent */
-  --glass-bg: rgba(212, 255, 0, 0.92);
+  /* Зелёная капля стекла: альфа понижена чтобы под фон проступал
+     backdrop-blur — liquid-glass всегда блюрит то, что за ним. */
+  --glass-bg: rgba(212, 255, 0, 0.7);
   --glass-border: rgba(255, 255, 255, 0.4);
   --glass-highlight: rgba(255, 255, 255, 0.65);
-  --glass-blur: none;
+  --glass-blur: blur(40px) saturate(180%);
   --glass-shadow:
     var(--glass-inset),
     inset 0 1px 0 rgba(255, 255, 255, 0.55),

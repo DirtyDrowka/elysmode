@@ -22,9 +22,11 @@
     0 22px 60px rgba(0, 0, 0, 0.6),
     0 6px 16px rgba(0, 0, 0, 0.35);
 
-  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'SF Pro Display',
+  /* San Francisco системный стек — на iOS Safari это SF Pro;
+     -apple-system / BlinkMacSystemFont — official aliases для SF на webkit */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display',
     'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif;
-  --font-mono: 'Geist Mono', 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
   --radius-capsule: 32px;
   --radius-pill: 999px;
@@ -37,6 +39,18 @@
   -webkit-user-drag: none;
   user-select: none;
   -webkit-user-select: none;
+  /* убираем нативный скроллбар везде (Firefox + старый Edge) */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+/* убираем нативный скроллбар везде (Webkit: Safari/Chrome) */
+*::-webkit-scrollbar,
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-thumb {
+  width: 0;
+  height: 0;
+  display: none;
+  background: transparent;
 }
 
 html,

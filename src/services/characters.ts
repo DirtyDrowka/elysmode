@@ -10,8 +10,10 @@ export interface CharacterDto {
   color: string;
   personality: string;
   appearance: string;
+  gender?: 'male' | 'female' | null;
   image_url: string | null;
   voice_id: string | null;
+  character_type?: 'synthetic' | 'user';
 }
 
 export function dtoToCharacter(d: CharacterDto): Character {
@@ -21,8 +23,10 @@ export function dtoToCharacter(d: CharacterDto): Character {
     color: d.color,
     personality: d.personality,
     appearance: d.appearance,
+    gender: d.gender ?? null,
     imageUrl: d.image_url,
     voiceId: d.voice_id,
+    characterType: d.character_type ?? 'synthetic',
   };
 }
 
@@ -40,6 +44,7 @@ export async function upsertCharacter(c: Character): Promise<Character> {
       color: c.color,
       personality: c.personality,
       appearance: c.appearance,
+      gender: c.gender ?? null,
       image_url: c.imageUrl,
       voice_id: c.voiceId,
     },

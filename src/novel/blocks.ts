@@ -103,10 +103,16 @@ export interface Character {
   color: string;
   personality: string;
   appearance: string;
+  /** 'male' | 'female' | null — заполняется в user-профиле, у synthetic
+   *  обычно null (определяется voice-agent'ом из текста). */
+  gender?: 'male' | 'female' | null;
   /** Сгенерированный портрет с прозрачным фоном; null пока грузится */
   imageUrl: string | null;
   /** Voice ID из ElevenLabs shared-voices library */
   voiceId: string | null;
+  /** 'synthetic' — создан LLM при прохождении новеллы (default);
+   *  'user' — профиль самого игрока. */
+  characterType?: 'synthetic' | 'user';
   error?: string;
 }
 

@@ -22,10 +22,10 @@ const tabs: Tab[] = [
 </script>
 
 <template>
-  <!-- Весь nav-bar — единый liquid-glass объект: scale+shimmer на удержании
-       работает на весь контейнер. Tab-кнопки внутри — обычные <button>
-       со своими click-хендлерами, они не glass-объекты сами по себе. -->
-  <LiquidGlass as="div" class="tab-bar" :scale-to="1.015">
+  <!-- Nav-bar — liquid-glass контейнер без interactivity: иначе он
+       перехватывает pointer через setPointerCapture() на корневом div'е
+       и на iOS/Android клики на дочерние button.tab не доходят. -->
+  <LiquidGlass as="div" class="tab-bar" :interactive="false">
     <button
       v-for="t in tabs"
       :key="t.key"

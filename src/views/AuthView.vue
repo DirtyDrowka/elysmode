@@ -2,6 +2,7 @@
 import { ref, onBeforeUnmount } from 'vue';
 import { useAuth } from '../composables/useAuth';
 import Pressable from '../components/Pressable.vue';
+import TextField from '../components/TextField.vue';
 
 const { initBotLogin, pollBotStatus, inflight } = useAuth();
 
@@ -76,19 +77,15 @@ function backToUsername() {
         <p class="lead">Войди через Telegram чтобы продолжить читать.</p>
 
         <form class="form" @submit.prevent="submitUsername">
-          <label class="field">
-            <span class="label">Твой Telegram-username</span>
-            <input
-              v-model="username"
-              type="text"
-              autocomplete="off"
-              autocapitalize="off"
-              spellcheck="false"
-              placeholder="@username"
-              class="input"
-              :disabled="inflight"
-            />
-          </label>
+          <TextField
+            v-model="username"
+            label="Твой Telegram-username"
+            placeholder="@username"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            :disabled="inflight"
+          />
 
           <Pressable
             as="button"
@@ -184,34 +181,6 @@ function backToUsername() {
   gap: 6px;
   text-align: left;
 }
-.label {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 1.5px;
-  color: rgba(255, 255, 255, 0.55);
-  text-transform: uppercase;
-  padding-left: 4px;
-}
-.input {
-  width: 100%;
-  box-sizing: border-box;
-  background: rgba(255, 255, 255, 0.05);
-  -webkit-backdrop-filter: blur(40px);
-  backdrop-filter: blur(40px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #fff;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  padding: 14px 16px;
-  border-radius: 14px;
-  outline: none;
-  transition: border-color 200ms ease, background 200ms ease;
-}
-.input:focus {
-  border-color: rgba(212, 255, 0, 0.4);
-  background: rgba(255, 255, 255, 0.08);
-}
-
 .primary-btn {
   background: var(--accent);
   color: #000;

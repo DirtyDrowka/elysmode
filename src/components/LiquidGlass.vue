@@ -37,7 +37,9 @@ const props = withDefaults(
   }
 );
 
-const emit = defineEmits<{ press: [] }>();
+/** press emit: координаты точки нажатия в процентах (0..100) от размеров
+ *  элемента. Старые callers без payload продолжают работать. */
+const emit = defineEmits<{ press: [info: { x: number; y: number }] }>();
 
 const pressed = ref(false);
 const pos = ref({ x: 50, y: 50 });
@@ -71,7 +73,7 @@ function onUp(e: PointerEvent) {
   const target = e.currentTarget as HTMLElement;
   target.releasePointerCapture?.(e.pointerId);
   if (wasPressed && !props.disabled && e.type === 'pointerup') {
-    emit('press');
+    emit('press', { x: pos.value.x, y: pos.value.y });
   }
 }
 

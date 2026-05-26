@@ -22,6 +22,7 @@ import type { Context, Next } from 'hono';
 
 import { sql } from './db.ts';
 import {
+  isDevAuthEnabled,
   signSession,
   verifySession,
   verifyTelegramAuth,
@@ -109,6 +110,28 @@ async function upsertUser(u: {
 // ─── routes ─────────────────────────────────────────────────────────────
 
 app.get('/api/health', (c) => c.json({ ok: true }));
+
+/** DEV-only: моментальный логин фейковым юзером. Активен только если
+ *  в env стоит ALLOW_DEV_AUTH=1 (на проде не задаётся). Используется для
+ *  локального тестирования фич, не требующих реального Telegram. */
+app.post('/api/auth/dev', async (c) => {
+  if (!isDevAuthEnabled()) return c.json({ error: 'disabled' }, 404);
+  const DEV_USER = {
+    telegram_id: 99999001,
+    username: 'dev_user',
+    first_name: 'Dev',
+    last_name: 'User',
+  };
+  await upsertUser(DEV_USER);
+  const token = signSession({
+    telegram_id: DEV_USER.telegram_id,
+    username: DEV_USER.username,
+  });
+  return c.json({
+    token,
+    user: { ...DEV_USER, photo_url: null },
+  });
+});
 
 /** Инфо о боте — frontend строит ссылку из username'а. */
 app.get('/api/auth/bot', async (c) => {
@@ -379,7 +402,9 @@ app.post('/api/voice/synth', requireAuth, async (c) => {
 
 // ─── characters (per-user collection) ──────────────────────────────────
 
-/** Список всех персонажей пользователя. */
+/** Список всех synthetic-персонажей пользователя.
+ *  User-профиль НЕ возвращается этим эндпоинтом — он отдельно через /api/profile,
+ *  иначе движок новеллы может запутаться и подцепить его как обычного NPC. */
 app.get('/api/characters', requireAuth, async (c) => {
   const u = c.get('user') as JwtPayload;
   const rows = await sql<
@@ -389,21 +414,24 @@ app.get('/api/characters', requireAuth, async (c) => {
       color: string;
       personality: string;
       appearance: string;
+      gender: string | null;
       image_url: string | null;
       voice_id: string | null;
+      character_type: 'synthetic' | 'user';
     }>
   >`
-    SELECT id, name, color, personality, appearance, image_url, voice_id
+    SELECT id, name, color, personality, appearance, gender, image_url, voice_id, character_type
     FROM characters
     WHERE owner_telegram_id = ${u.telegram_id}
+      AND character_type = 'synthetic'
     ORDER BY created_at
   `;
   return c.json({ characters: rows });
 });
 
-/** UPSERT персонажа. Вызывается фронтом при create_character блоке.
- *  Если у персонажа ещё нет voice_id — синхронно запускает voice-agent
- *  для подбора голоса из ElevenLabs library. */
+/** UPSERT синтетического персонажа. Вызывается фронтом при create_character
+ *  блоке во время прохождения новеллы. Если у персонажа ещё нет voice_id —
+ *  синхронно запускает voice-agent для подбора голоса. */
 app.post('/api/characters', requireAuth, async (c) => {
   const u = c.get('user') as JwtPayload;
   const body = (await c.req.json()) as {
@@ -412,6 +440,7 @@ app.post('/api/characters', requireAuth, async (c) => {
     color?: string;
     personality?: string;
     appearance?: string;
+    gender?: string | null;
     image_url?: string | null;
     voice_id?: string | null;
   };
@@ -422,7 +451,9 @@ app.post('/api/characters', requireAuth, async (c) => {
 
   const [existing] = await sql<Array<{ voice_id: string | null }>>`
     SELECT voice_id FROM characters
-    WHERE owner_telegram_id = ${u.telegram_id} AND id = ${body.id}
+    WHERE owner_telegram_id = ${u.telegram_id}
+      AND id = ${body.id}
+      AND character_type = 'synthetic'
   `;
 
   let voiceId: string | null = body.voice_id ?? existing?.voice_id ?? null;
@@ -442,7 +473,8 @@ app.post('/api/characters', requireAuth, async (c) => {
 
   await sql`
     INSERT INTO characters
-      (owner_telegram_id, id, name, color, personality, appearance, image_url, voice_id, updated_at)
+      (owner_telegram_id, id, name, color, personality, appearance,
+       gender, image_url, voice_id, character_type, updated_at)
     VALUES (
       ${u.telegram_id},
       ${body.id},
@@ -450,8 +482,10 @@ app.post('/api/characters', requireAuth, async (c) => {
       ${body.color ?? '#d4ff00'},
       ${body.personality ?? ''},
       ${body.appearance ?? ''},
+      ${body.gender ?? null},
       ${body.image_url ?? null},
       ${voiceId},
+      'synthetic',
       NOW()
     )
     ON CONFLICT (owner_telegram_id, id) DO UPDATE SET
@@ -459,6 +493,7 @@ app.post('/api/characters', requireAuth, async (c) => {
       color       = EXCLUDED.color,
       personality = EXCLUDED.personality,
       appearance  = EXCLUDED.appearance,
+      gender      = COALESCE(EXCLUDED.gender, characters.gender),
       image_url   = COALESCE(EXCLUDED.image_url, characters.image_url),
       voice_id    = COALESCE(EXCLUDED.voice_id, characters.voice_id),
       updated_at  = NOW()
@@ -471,10 +506,143 @@ app.post('/api/characters', requireAuth, async (c) => {
       color: body.color ?? '#d4ff00',
       personality: body.personality ?? '',
       appearance: body.appearance ?? '',
+      gender: body.gender ?? null,
       image_url: body.image_url ?? null,
       voice_id: voiceId,
+      character_type: 'synthetic',
     },
   });
+});
+
+// ─── user profile (свой персонаж игрока) ─────────────────────────────────
+// Profile — отдельная сущность с фиксированным id='self', хранится в той же
+// таблице characters с character_type='user'. Один профиль на пользователя
+// (уникальность поддерживается partial unique index'ом).
+
+const PROFILE_ID = 'self';
+
+interface ProfileRow {
+  id: string;
+  name: string;
+  color: string;
+  personality: string;
+  appearance: string;
+  gender: string | null;
+  image_url: string | null;
+  voice_id: string | null;
+  character_type: 'user';
+}
+
+/** Получить профиль текущего пользователя или null если ещё не создан. */
+app.get('/api/profile', requireAuth, async (c) => {
+  const u = c.get('user') as JwtPayload;
+  const [row] = await sql<Array<ProfileRow>>`
+    SELECT id, name, color, personality, appearance,
+           gender, image_url, voice_id, character_type
+    FROM characters
+    WHERE owner_telegram_id = ${u.telegram_id}
+      AND character_type = 'user'
+    LIMIT 1
+  `;
+  return c.json({ profile: row ?? null });
+});
+
+/** UPSERT профиля. Если frontend передал voice_id — используем как есть
+ *  (юзер выбрал голос вручную). Если voice_id не передан и его ещё нет —
+ *  fallback'ом запускаем voiceAgent. */
+app.post('/api/profile', requireAuth, async (c) => {
+  const u = c.get('user') as JwtPayload;
+  const body = (await c.req.json()) as {
+    name?: string;
+    color?: string;
+    personality?: string;
+    appearance?: string;
+    gender?: string | null;
+    voice_id?: string | null;
+    image_url?: string | null;
+  };
+  if (!body.name) return c.json({ error: 'name required' }, 400);
+
+  const [existing] = await sql<
+    Array<{ voice_id: string | null; appearance: string | null }>
+  >`
+    SELECT voice_id, appearance FROM characters
+    WHERE owner_telegram_id = ${u.telegram_id}
+      AND character_type = 'user'
+  `;
+
+  // Приоритет: явный body.voice_id → существующий → voiceAgent fallback
+  let voiceId: string | null =
+    body.voice_id ?? existing?.voice_id ?? null;
+  if (!voiceId) {
+    try {
+      voiceId = await selectVoiceForCharacter({
+        id: PROFILE_ID,
+        name: body.name,
+        personality: body.personality ?? '',
+        appearance: body.appearance ?? '',
+      });
+    } catch (e) {
+      console.error('[api] profile voice agent failed:', e);
+    }
+  }
+
+  await sql`
+    INSERT INTO characters
+      (owner_telegram_id, id, name, color, personality, appearance,
+       gender, image_url, voice_id, character_type, updated_at)
+    VALUES (
+      ${u.telegram_id},
+      ${PROFILE_ID},
+      ${body.name},
+      ${body.color ?? '#d4ff00'},
+      ${body.personality ?? ''},
+      ${body.appearance ?? ''},
+      ${body.gender ?? null},
+      ${body.image_url ?? null},
+      ${voiceId},
+      'user',
+      NOW()
+    )
+    ON CONFLICT (owner_telegram_id, id) DO UPDATE SET
+      name        = EXCLUDED.name,
+      color       = EXCLUDED.color,
+      personality = EXCLUDED.personality,
+      appearance  = EXCLUDED.appearance,
+      gender      = EXCLUDED.gender,
+      image_url   = EXCLUDED.image_url,
+      voice_id    = COALESCE(EXCLUDED.voice_id, characters.voice_id),
+      updated_at  = NOW()
+  `;
+
+  return c.json({
+    profile: {
+      id: PROFILE_ID,
+      name: body.name,
+      color: body.color ?? '#d4ff00',
+      personality: body.personality ?? '',
+      appearance: body.appearance ?? '',
+      gender: body.gender ?? null,
+      image_url: body.image_url ?? null,
+      voice_id: voiceId,
+      character_type: 'user',
+    },
+  });
+});
+
+/** Обновить ТОЛЬКО image_url профиля — для async-генерации портрета. */
+app.put('/api/profile/image', requireAuth, async (c) => {
+  const u = c.get('user') as JwtPayload;
+  const body = (await c.req.json()) as { image_url?: string };
+  if (!body.image_url) return c.json({ error: 'image_url required' }, 400);
+  const result = await sql`
+    UPDATE characters
+    SET image_url = ${body.image_url}, updated_at = NOW()
+    WHERE owner_telegram_id = ${u.telegram_id}
+      AND character_type = 'user'
+  `;
+  if (result.count === 0) return c.json({ error: 'profile not found' }, 404);
+  return c.json({ ok: true });
 });
 
 /** Обновить ТОЛЬКО image_url — для асинхронной догенерации портрета. */

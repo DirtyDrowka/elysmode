@@ -8,7 +8,10 @@ import TapOverlay from '../components/TapOverlay.vue';
 import TitlePill from '../components/TitlePill.vue';
 import TabBar from '../components/TabBar.vue';
 import StoryListView from './StoryListView.vue';
+import ProfileView from './ProfileView.vue';
 import type { BackgroundRef } from '../novel/types';
+
+type TabKey = 'home' | 'catalog' | 'read' | 'saved' | 'profile';
 
 const engine = useDynamicEngine();
 const {
@@ -35,6 +38,13 @@ const {
 
 const canGoBack = computed(() => currentIdx.value > 0);
 const defaultBg: BackgroundRef = { kind: 'preset', value: 'street_night' };
+
+// Активная вкладка TabBar. По умолчанию «Читаю». Другие вкладки кроме
+// 'profile' пока no-op — открываются как list-view вкладки «Читаю».
+const currentTab = ref<TabKey>('read');
+function selectTab(t: TabKey) {
+  currentTab.value = t;
+}
 
 // View mode внутри вкладки «Читаю»: novel (читаем сцену) или list (выбор истории).
 // На старте всегда list — пользователь выбирает что открыть или жмёт «Новая история».
@@ -72,35 +82,52 @@ const stories = computed(() => {
 
 <template>
   <div class="phone-frame">
-    <!-- NOVEL MODE: фон, спрайт, капсулы — всё что относится к чтению -->
-    <template v-if="viewMode === 'novel'">
-      <SceneBackground :background="defaultBg" :image-url="displayedBgUrl" />
-      <SceneCharacters :characters="sceneCharacters" />
+    <!-- Вкладка ЧИТАЮ — текущий контент: новелла или список историй -->
+    <template v-if="currentTab === 'read'">
+      <template v-if="viewMode === 'novel'">
+        <SceneBackground :background="defaultBg" :image-url="displayedBgUrl" />
+        <SceneCharacters :characters="sceneCharacters" />
 
-      <TapOverlay :enabled="!isChoice && !error" @tap="tap" />
+        <TapOverlay :enabled="!isChoice && !error" @tap="tap" />
 
-      <TitlePill :title="title || 'elys mode'" />
+        <TitlePill :title="title || 'elys mode'" />
 
-      <DialoguePanel
-        :block="currentBlock"
-        :character="currentCharacter"
-        :characters="characters"
-        :displayed-text="displayedText"
-        :is-typing="isTyping"
-        :is-loading="isLoading"
-        :error="error"
-        :can-go-back="canGoBack"
-        @choose="selectChoice"
-        @advance="tap"
-        @retry="retry"
-        @back="goBack"
-        @close="openList"
-      />
+        <DialoguePanel
+          :block="currentBlock"
+          :character="currentCharacter"
+          :characters="characters"
+          :displayed-text="displayedText"
+          :is-typing="isTyping"
+          :is-loading="isLoading"
+          :error="error"
+          :can-go-back="canGoBack"
+          @choose="selectChoice"
+          @advance="tap"
+          @retry="retry"
+          @back="goBack"
+          @close="openList"
+        />
+      </template>
+
+      <template v-else>
+        <TitlePill title="Истории" />
+        <StoryListView
+          :stories="stories"
+          @new="startNew"
+          @open="openStory"
+        />
+      </template>
     </template>
 
-    <!-- LIST MODE: список историй с зелёной «новая история» -->
+    <!-- Вкладка ПРОФИЛЬ — редактирование своего персонажа -->
+    <template v-else-if="currentTab === 'profile'">
+      <ProfileView />
+    </template>
+
+    <!-- Остальные вкладки пока никуда не ведут — показываем общий placeholder
+         (тот же list-view) чтобы не было пустого экрана. -->
     <template v-else>
-      <TitlePill title="Истории" />
+      <TitlePill title="Скоро" />
       <StoryListView
         :stories="stories"
         @new="startNew"
@@ -108,8 +135,8 @@ const stories = computed(() => {
       />
     </template>
 
-    <!-- TabBar общий для обоих режимов: вкладка «Читаю» остаётся активной -->
-    <TabBar active="read" />
+    <!-- TabBar общий для всех режимов -->
+    <TabBar :active="currentTab" @select="selectTab" />
   </div>
 </template>
 

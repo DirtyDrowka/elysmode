@@ -26,6 +26,25 @@ interface MeResponse {
 
 async function fetchMe() {
   if (!getToken()) {
+    // В dev-режиме (vite dev server) — пробуем моментальный fake-login
+    // через /api/auth/dev. На проде эндпоинт вернёт 404 и мы просто
+    // упадём в обычный flow (AuthView с TG-логином).
+    if (import.meta.env.DEV) {
+      try {
+        const r = await api<AuthResponse | null>('/api/auth/dev', {
+          method: 'POST',
+          optionalAuth: true,
+        });
+        if (r && r.token && r.user) {
+          setToken(r.token);
+          user.value = r.user;
+          ready.value = true;
+          return;
+        }
+      } catch {
+        /* dev endpoint выключен — продолжаем как обычно */
+      }
+    }
     user.value = null;
     ready.value = true;
     return;
